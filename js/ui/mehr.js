@@ -1,7 +1,8 @@
 // Einstellungen, Haushalt, Verbindung, Datensicherung.
 
-import { add, el } from '../util.js';
+import { add, el, clear } from '../util.js';
 import { getConfig, setConfig, clearConfig } from '../../config.js';
+import { BUILD } from '../version.js';
 import * as store from '../state.js';
 import * as sync from '../sync.js';
 import { toast, sheet, confirmSheet, toggleRow, field } from './shell.js';
@@ -177,7 +178,11 @@ export function render() {
     ),
   );
 
-  add(wrap, 
+  // ---------- Diagnose ----------
+  add(wrap, el('div.section-title', 'Diagnose'));
+  add(wrap, diagnoseCard());
+
+  add(wrap,
     el('p.tiny.faint.center', { style: { padding: '10px 0 20px' } },
       'Einkaufsliste · offline nutzbar · Daten liegen auf deinem Gerät',
       state.lastPulledAt ? el('div', `zuletzt abgeglichen: ${new Date(state.lastPulledAt).toLocaleString('de-CH')}`) : null,
@@ -194,6 +199,121 @@ export function render() {
  * dort leer vor und hält das für einen Fehler. Solange kein Haushalt
  * verbunden ist, ist das tatsächlich so.
  */
+/**
+ * Was die App ueber sich selbst weiss.
+ *
+ * Aus der Ferne ist nicht zu sehen, welche Fassung auf einem Telefon
+ * laeuft und woran die Anmeldung scheitert. Statt zu raten, schreibt
+ * die App es hin - und der Text laesst sich in einem Zug kopieren.
+ */
+function diagnoseCard() {
+  const card = el('div.card.card-pad');
+  const lines = el('div.small.muted', { style: { lineHeight: '1.7' } }, 'Wird geprüft …');
+
+  let text = '';
+
+  add(card, lines,
+    el('div.btn-row', { style: { marginTop: '12px' } },
+      el('button.btn', {
+        onclick: async (event) => {
+          const button = event.currentTarget;
+          button.disabled = true;
+          await sync.reconnect();
+          button.disabled = false;
+          toast('Verbindung neu aufgebaut');
+          rerenderHook();
+        },
+      }, 'Neu verbinden'),
+      el('button.btn', {
+        onclick: async () => {
+          try {
+            await navigator.clipboard.writeText(text);
+            toast('Diagnose kopiert');
+          } catch {
+            toast('Kopieren ging nicht — Text von Hand markieren');
+          }
+        },
+      }, 'Kopieren'),
+    ),
+    el('div.btn-row', { style: { marginTop: '8px' } },
+      el('button.btn.danger', { onclick: frischLaden }, 'App-Speicher auffrischen'),
+    ),
+    el('div.tiny.faint', { style: { marginTop: '8px' } },
+      'Auffrischen leert nur den Zwischenspeicher der Programmdateien und lädt neu. '
+      + 'Deine Liste bleibt.'),
+  );
+
+  (async () => {
+    const report = await sync.diagnose();
+    const zwischenspeicher = await cacheNamen();
+    const zeilen = [
+      ['Version (Code)', BUILD],
+      ['Version (Speicher)', zwischenspeicher],
+      ['Server', report.url],
+      ['Schlüssel', report.schluessel],
+      ['Zugangsdaten', report.quelle],
+      ['Bibliothek', report.bibliothek],
+      ['Anmeldung', report.sitzung],
+      ['Status', report.status],
+    ];
+    text = zeilen.map(([k, v]) => `${k}: ${v}`).join('\n');
+
+    clear(lines);
+    for (const [k, v] of zeilen) {
+      add(lines, el('div', el('span.bold', `${k}: `), String(v)));
+    }
+    if (BUILD !== zwischenspeicher && zwischenspeicher !== '(keiner)') {
+      add(lines, el('div', { style: { marginTop: '8px', color: 'var(--danger)' } },
+        'Code und Speicher sind verschieden — es läuft noch eine alte Fassung. '
+        + 'Auf "App-Speicher auffrischen" tippen.'));
+    }
+  })();
+
+  return card;
+}
+
+/** Welche Fassung liegt im Zwischenspeicher des Service Workers? */
+async function cacheNamen() {
+  if (!('caches' in window)) return '(keiner)';
+  try {
+    const keys = await caches.keys();
+    const shell = keys.find((k) => k.endsWith('-shell'));
+    return shell ? shell.replace('einkauf-', '').replace('-shell', '') : '(keiner)';
+  } catch {
+    return '(nicht lesbar)';
+  }
+}
+
+/**
+ * Der Ausweg aus einem festgefahrenen Zwischenspeicher. Auf dem
+ * iPhone bleibt ein alter Service Worker sonst hartnaeckig liegen,
+ * und die App zeigt nach jedem Neuladen weiter den alten Stand.
+ */
+async function frischLaden() {
+  const ok = await confirmSheet(
+    'App-Speicher auffrischen?',
+    'Die zwischengespeicherten Programmdateien werden verworfen und frisch geladen. '
+    + 'Deine Liste, Läden und Vorlagen bleiben unberührt.',
+    { confirmLabel: 'Auffrischen' },
+  );
+  if (!ok) return;
+
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch (err) {
+    console.warn('Auffrischen unvollständig', err);
+  }
+  // Mit Anhaengsel, damit auch der Browser selbst neu holt.
+  location.replace(`${location.pathname}?frisch=${Date.now()}${location.hash}`);
+}
+
 /**
  * Steht die Verbindung nicht, gehoert der Grund direkt neben die
  * Knoepfe. Vorher stand er nur im title-Attribut der Statusanzeige -
