@@ -73,6 +73,7 @@ export function render() {
       el('div.card-pad',
         el('div.small.muted', { style: { marginBottom: '12px' } },
           'Noch nicht verbunden. Leg einen Haushalt an oder tritt mit dem Code deines Partners bei.'),
+        verbindungsFehler(),
         standaloneHint(),
         el('div.btn-row',
           el('button.btn.primary', { onclick: createHousehold }, 'Haushalt anlegen'),
@@ -193,6 +194,26 @@ export function render() {
  * dort leer vor und hält das für einen Fehler. Solange kein Haushalt
  * verbunden ist, ist das tatsächlich so.
  */
+/**
+ * Steht die Verbindung nicht, gehoert der Grund direkt neben die
+ * Knoepfe. Vorher stand er nur im title-Attribut der Statusanzeige -
+ * auf dem Telefon unerreichbar, weil es kein Schwebenlassen gibt.
+ */
+function verbindungsFehler() {
+  const status = sync.getStatus();
+  if (status.state !== 'error' || !status.detail) return null;
+
+  return el('div.small', {
+    style: {
+      marginBottom: '12px',
+      padding: '10px 12px',
+      borderRadius: 'var(--radius-sm)',
+      background: 'var(--bg-sunken)',
+      color: 'var(--danger)',
+    },
+  }, el('span.bold', 'Verbindung: '), status.detail);
+}
+
 function standaloneHint() {
   const standalone = window.matchMedia?.('(display-mode: standalone)').matches
     || window.navigator.standalone === true;

@@ -123,17 +123,28 @@ const STATUS_LABEL = {
   error: { text: 'Fehler', css: 'error' },
 };
 
+let letzterStatus = null;
+
 function paintStatus(status) {
   const info = STATUS_LABEL[status.state] ?? STATUS_LABEL.local;
   const pending = store.outboxSize();
 
+  letzterStatus = status;
   nodes.status.hidden = false;
   nodes.status.className = `status ${info.css}`.trim();
   nodes.statusText.textContent = pending > 0 && status.state !== 'online'
     ? `${info.text} · ${pending}`
     : info.text;
+  // title ist auf dem Telefon nicht erreichbar - es gibt kein
+  // Schwebenlassen. Der Grund muss auf Antippen kommen, sonst steht
+  // da nur "Fehler" und niemand erfaehrt, welcher.
   nodes.status.title = status.detail ?? '';
 }
+
+nodes.status.addEventListener('click', () => {
+  const detail = letzterStatus?.detail;
+  if (detail) toast(detail, { ms: 9000 });
+});
 
 // ------------------------------------------------------------
 // Service Worker
