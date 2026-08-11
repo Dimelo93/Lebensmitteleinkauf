@@ -249,6 +249,9 @@ export async function pull() {
     }
   }
   store.markPulled();
+  // Erst jetzt, mit dem vollstaendigen Bild aus der Datenbank:
+  // gleichnamige Laeden von verschiedenen Geraeten zusammenlegen.
+  store.mergeDuplicateStores();
   return count;
 }
 
