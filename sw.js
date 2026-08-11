@@ -7,7 +7,7 @@
 // Hochzaehlen, sobald sich eine der Dateien unten aendert. Sonst
 // liefert der Cache beim naechsten Start noch die alte Fassung -
 // bei config.js hiesse das: Zugangsdaten da, App trotzdem offline.
-const VERSION = 'einkauf-v4';
+const VERSION = 'einkauf-v5';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -23,6 +23,7 @@ const PRECACHE = [
   './js/util.js',
   './js/katalog.js',
   './js/version.js',
+  './vendor/supabase-js.mjs',
   './js/parse.js',
   './js/analyse.js',
   './js/ui/shell.js',
