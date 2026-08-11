@@ -6,7 +6,7 @@
 // ist. Dadurch funktioniert die Liste im Ladenuntergeschoss ohne
 // Empfang genauso wie zu Hause.
 
-import { uid, nowIso, memoryKey, isNewer, debounce, colorFor } from './util.js';
+import { uid, nowIso, memoryKey, isNewer, debounce, colorFor, normalize } from './util.js';
 import { guessCategory, guessUnit } from './katalog.js';
 
 const STORAGE_KEY = 'lebensmittel.v1';
@@ -282,6 +282,129 @@ function reindexStores() {
 export function setActiveStore(id) {
   state.settings.activeStoreId = state.settings.activeStoreId === id ? null : id;
   notify();
+}
+
+/**
+ * Gleichnamige Laeden zusammenlegen.
+ *
+ * Zwei Geraete, die getrennt gestartet sind, haben beide "Lidl" -
+ * aber mit verschiedenen IDs. Ohne diesen Schritt stuenden nach dem
+ * Verbinden alle Startlaeden doppelt in der Liste.
+ *
+ * Wer ueberlebt, entscheidet allein die kleinere ID. Die Regel muss
+ * geraeteunabhaengig sein: jedes Geraet rechnet fuer sich, und nur
+ * so kommen alle auf denselben Laden. Sonst behaelt Geraet A seinen
+ * Lidl, Geraet B seinen, beide schieben ihre Fassung hoch und der
+ * Doppeleintrag ist wieder da.
+ *
+ * Laeuft nach jedem Abgleich, nicht nur beim Beitreten: raeumt ein
+ * Geraet auf, muessen die anderen ihre eigenen Verweise nachziehen.
+ */
+export function mergeDuplicateStores() {
+  const groups = new Map();
+  for (const store of state.stores) {
+    const key = normalize(store.name);
+    if (!key) continue;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(store);
+  }
+
+  const remap = new Map();
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    // Geloeschte zaehlen bei der Wahl nicht mit, bleiben aber in der
+    // Zuordnung. Sonst bricht die Kette: hat Geraet A seinen Lidl
+    // schon als geloescht markiert, erfaehrt Geraet B nie mehr, wohin
+    // seine Artikel gehoeren - sie zeigten auf einen toten Laden.
+    const live = group.filter((s) => !s.deleted).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    const survivor = live[0];
+    if (!survivor) continue;
+    for (const other of group) {
+      if (other.id !== survivor.id) remap.set(other.id, survivor.id);
+    }
+  }
+  if (remap.size === 0) return 0;
+
+  const at = nowIso();
+  let changed = 0;
+
+  for (const store of state.stores) {
+    if (!remap.has(store.id) || store.deleted) continue;
+    store.deleted = true;
+    store.updatedAt = at;
+    enqueue('stores', store);
+    changed += 1;
+  }
+
+  for (const table of ['items', 'staples', 'receipts']) {
+    for (const row of state[table]) {
+      const target = remap.get(row.storeId);
+      if (!target) continue;
+      row.storeId = target;
+      row.updatedAt = at;
+      enqueue(table, row);
+      changed += 1;
+    }
+  }
+
+  for (const entry of Object.values(state.memory)) {
+    let touched = false;
+
+    const target = remap.get(entry.storeId);
+    if (target) {
+      entry.storeId = target;
+      touched = true;
+    }
+
+    // Die Preishistorie haengt am Laden. Wird zusammengelegt,
+    // muessen auch die beiden Preistoepfe zusammen - sonst faellt
+    // die Haelfte der gesammelten Preise unter den Tisch.
+    for (const [bucket, stats] of Object.entries(entry.prices ?? {})) {
+      const into = remap.get(bucket);
+      if (!into) continue;
+      delete entry.prices[bucket];
+      entry.prices[into] = mergePriceBuckets(entry.prices[into], stats);
+      touched = true;
+    }
+
+    if (touched) {
+      entry.updatedAt = at;
+      enqueue('item_memory', entry);
+      changed += 1;
+    }
+  }
+
+  const active = remap.get(state.settings.activeStoreId);
+  if (active) {
+    state.settings.activeStoreId = active;
+    changed += 1;
+  }
+
+  // Nichts zu tun heisst: schon aufgeraeumt. Die Zuordnung bleibt
+  // bestehen, solange die Grabsteine da sind - ohne diesen Ausstieg
+  // wuerde jeder Abgleich die Oberflaeche neu zeichnen.
+  if (changed === 0) return 0;
+
+  reindexStores();
+  notify();
+  return changed;
+}
+
+function mergePriceBuckets(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  const n = (a.n || 0) + (b.n || 0);
+  const sum = (a.sum || 0) + (b.sum || 0);
+  // Der juengere Eintrag gibt den zuletzt gesehenen Preis vor.
+  const newer = String(b.at ?? '').localeCompare(String(a.at ?? '')) > 0 ? b : a;
+  return {
+    n,
+    sum,
+    avg: n > 0 ? Math.round((sum / n) * 100) / 100 : null,
+    last: newer.last,
+    unit: newer.unit ?? a.unit ?? b.unit,
+    at: newer.at,
+  };
 }
 
 // ------------------------------------------------------------
