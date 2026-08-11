@@ -69,10 +69,11 @@ export function render() {
       ),
     );
   } else if (config.configured) {
-    add(householdCard, 
+    add(householdCard,
       el('div.card-pad',
         el('div.small.muted', { style: { marginBottom: '12px' } },
           'Noch nicht verbunden. Leg einen Haushalt an oder tritt mit dem Code deines Partners bei.'),
+        standaloneHint(),
         el('div.btn-row',
           el('button.btn.primary', { onclick: createHousehold }, 'Haushalt anlegen'),
           el('button.btn', { onclick: joinHousehold }, 'Beitreten'),
@@ -80,10 +81,11 @@ export function render() {
       ),
     );
   } else {
-    add(householdCard, 
+    add(householdCard,
       el('div.card-pad',
         el('div.small.muted',
           'Zum Teilen fehlt die Verbindung zu Supabase. Trag sie unten unter "Verbindung" ein — die Anleitung steht in SUPABASE.md im Projekt.'),
+        standaloneHint(),
       ),
     );
   }
@@ -182,6 +184,35 @@ export function render() {
   );
 
   return wrap;
+}
+
+/**
+ * Warnung vor einer Eigenheit von iOS: eine Web-App auf dem Homescreen
+ * bekommt einen eigenen Speicher, getrennt von Safari. Wer die Liste
+ * erst in Safari füllt und sie dann aufs Homescreen legt, findet sie
+ * dort leer vor und hält das für einen Fehler. Solange kein Haushalt
+ * verbunden ist, ist das tatsächlich so.
+ */
+function standaloneHint() {
+  const standalone = window.matchMedia?.('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+  const apple = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  if (!apple) return null;
+
+  return el('div.small', {
+    style: {
+      marginTop: '12px',
+      padding: '10px 12px',
+      borderRadius: 'var(--radius-sm)',
+      background: 'var(--bg-sunken)',
+      color: 'var(--text-dim)',
+    },
+  },
+    el('span.bold', standalone ? 'Fehlt hier etwas? ' : 'Bevor du sie auf den Homescreen legst: '),
+    'Auf dem iPhone hat die App auf dem Homescreen einen eigenen Speicher, getrennt von Safari. '
+    + 'Ohne verbundenen Haushalt sind das zwei getrennte Listen. '
+    + 'Sobald ein Haushalt eingerichtet ist, zeigen beide dasselbe.',
+  );
 }
 
 // ------------------------------------------------------------
