@@ -44,6 +44,65 @@ function setStatus(state, detail) {
 
 export const getStatus = () => statusValue;
 
+/**
+ * Selbstauskunft fuer die Einstellungen.
+ *
+ * Aus der Ferne laesst sich nicht sehen, welche Fassung auf einem
+ * Telefon laeuft, woher die Zugangsdaten stammen und woran die
+ * Anmeldung scheitert. Ohne diese Angaben raet man - deshalb fragt
+ * die App sich selbst und schreibt es hin.
+ */
+export async function diagnose() {
+  const config = getConfig();
+  const report = {
+    url: config.url || '(leer)',
+    schluessel: kuerze(config.anonKey),
+    quelle: config.ausProjekt ? 'aus dem Projekt' : 'auf diesem Gerät gespeichert',
+    bibliothek: '…',
+    sitzung: '…',
+    status: statusValue.detail || statusValue.state,
+  };
+
+  try {
+    await loadLibrary();
+    report.bibliothek = 'geladen';
+  } catch (err) {
+    report.bibliothek = `nicht erreichbar (${err.message || 'unbekannt'})`;
+  }
+
+  try {
+    const sb = client ?? null;
+    if (!sb) {
+      report.sitzung = 'keine Verbindung';
+    } else {
+      const { data } = await sb.auth.getSession();
+      report.sitzung = data?.session ? 'angemeldet' : 'nicht angemeldet';
+    }
+  } catch (err) {
+    report.sitzung = `Fehler (${err.message || 'unbekannt'})`;
+  }
+
+  return report;
+}
+
+/** Genug zum Wiedererkennen, nicht genug zum Mitlesen. */
+function kuerze(key) {
+  const text = String(key ?? '');
+  if (!text) return '(leer)';
+  if (text.length <= 14) return `${text.length} Zeichen`;
+  return `${text.slice(0, 8)}…${text.slice(-4)} · ${text.length} Zeichen`;
+}
+
+/** Verbindung verwerfen und von vorn aufbauen. */
+export async function reconnect() {
+  if (client && channel) {
+    await client.removeChannel(channel).catch(() => {});
+    channel = null;
+  }
+  client = null;
+  return connect();
+}
+
 // ------------------------------------------------------------
 // Spaltenabbildung lokal <-> Datenbank
 // ------------------------------------------------------------

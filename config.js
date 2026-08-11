@@ -44,6 +44,12 @@ export function getConfig() {
     anonKey,
     analyseUrl,
     configured: Boolean(url && anonKey),
+    // Ein Eintrag unter Mehr -> Verbindung ueberschreibt die Werte
+    // aus dem Projekt, und zwar dauerhaft. Ein alter, halb getippter
+    // Schluessel von einem frueheren Versuch verdeckt so den
+    // richtigen - ohne dass man es sieht. Deshalb ausweisen, woher
+    // die Werte kommen.
+    ausProjekt: local.url == null && local.anonKey == null,
   };
 }
 
