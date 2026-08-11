@@ -76,6 +76,8 @@ Dann ist jedes Gerät automatisch verbunden und braucht nur noch den Haushalts-C
 
 Ab jetzt sehen beide dieselbe Liste. Der Status oben rechts zeigt „Synchron".
 
+Hatte jedes Gerät vorher schon seine eigene Liste, treffen zwei Sätze derselben Läden aufeinander — beide haben ein „Lidl", nur eben ein je eigenes. Die App legt gleichnamige Läden beim Abgleich selbst zusammen und hängt Artikel, Vorlagen und Preise auf den verbleibenden um. Was nur auf einem Gerät stand, bleibt.
+
 ---
 
 ## Teil B — Quittungs-Analyse
@@ -160,6 +162,9 @@ Realtime ist nicht aktiv. Meist reicht es, `schema.sql` nochmals auszuführen; s
 
 **Änderungen kommen nicht am anderen Gerät an**
 Zählt der Status ausstehende Änderungen (z. B. „Offline · 3"), fehlt die Verbindung. Prüfen, ob beide Geräte im selben Haushalt sind: unter **Mehr** muss auf beiden derselbe Beitrittscode stehen.
+
+**Ein Laden steht doppelt in der Liste**
+Gleichnamige Läden legt die App beim nächsten Abgleich von selbst zusammen. Bleiben zwei stehen, schreiben sie sich verschieden — „Coop" und „Coop City" gelten als zwei Läden. Einen davon unter **Läden** umbenennen oder löschen.
 
 **„Auf dem Server fehlt ANTHROPIC_API_KEY"**
 `supabase secrets set ANTHROPIC_API_KEY=…` wurde nicht ausgeführt oder nicht für dieses Projekt.
