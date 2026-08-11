@@ -81,7 +81,21 @@ export async function diagnose() {
       report.sitzung = 'keine Verbindung';
     } else {
       const { data } = await sb.auth.getSession();
-      report.sitzung = data?.session ? 'angemeldet' : 'nicht angemeldet';
+      const session = data?.session ?? null;
+      if (!session) {
+        report.sitzung = 'nicht angemeldet';
+      } else if (session.expires_at == null) {
+        report.sitzung = 'angemeldet';
+      } else {
+        // Anonyme Sitzungen laufen nach einer Stunde ab. Wann genau,
+        // ist die entscheidende Angabe: eine abgelaufene Sitzung
+        // sieht von aussen aus wie gar keine, verhaelt sich aber
+        // anders - die Datenbank sagt dann "Nicht angemeldet".
+        const restMin = Math.round((session.expires_at * 1000 - Date.now()) / 60000);
+        report.sitzung = restMin > 0
+          ? `angemeldet, noch ${restMin} min gültig`
+          : `abgelaufen seit ${Math.abs(restMin)} min`;
+      }
     }
   } catch (err) {
     report.sitzung = `Fehler (${err.message || 'unbekannt'})`;
@@ -326,6 +340,70 @@ export async function requireClient() {
   return connect();
 }
 
+// Wie lange vor Ablauf schon erneuert wird. Eine Sitzung, die in
+// zwei Minuten stirbt, ist fuer eine Anfrage von jetzt nutzlos.
+const SITZUNG_PUFFER_MS = 120_000;
+
+/**
+ * Eine Sitzung besorgen, die auch wirklich noch gilt.
+ *
+ * Anonyme Sitzungen laufen nach einer Stunde ab. Auf dem Telefon
+ * liegt die App die meiste Zeit im Hintergrund, wo iOS die
+ * Auffrischung anhaelt. Wer sie am Abend wieder aufmacht, hat ein
+ * abgelaufenes Token - und Supabase gibt ohne gueltiges Token die
+ * Kennung des Benutzers nicht heraus. Die Datenbank sieht dann
+ * niemanden und antwortet "Nicht angemeldet", obwohl oben noch
+ * "Synchron" steht.
+ *
+ * Deshalb vor jedem Zugriff nachsehen und notfalls erneuern.
+ */
+async function ensureSession(sb) {
+  const { data } = await sb.auth.getSession();
+  const session = data?.session ?? null;
+
+  const laeuftBald = session?.expires_at != null
+    && session.expires_at * 1000 - Date.now() < SITZUNG_PUFFER_MS;
+
+  if (session && !laeuftBald) return session;
+
+  if (session) {
+    const { data: erneuert } = await sb.auth.refreshSession();
+    if (erneuert?.session) return erneuert.session;
+  }
+
+  // Auffrischen ging nicht. Neu anmelden - das ergibt allerdings
+  // eine neue Kennung, und die Mitgliedschaft im Haushalt haengt an
+  // der alten. Deshalb gleich wieder beitreten; der Beitrittscode
+  // liegt lokal. Er ist das eigentliche Kennwort, die Kennung ist
+  // austauschbar.
+  const { data: frisch, error } = await sb.auth.signInAnonymously();
+  if (error) throw new Error(erklaereAnmeldefehler(error));
+  if (!frisch?.session) {
+    throw new Error('Die Anmeldung kam ohne Sitzung zurück. Steht in Supabase unter '
+      + 'Authentication → Sign In / Providers der Schalter "Anonymous sign-ins" auf an?');
+  }
+
+  const code = store.getState().household?.joinCode;
+  if (code) {
+    const { error: beitritt } = await sb.rpc('join_household', { code, member_name: null });
+    if (beitritt) console.warn('Wiedereintritt in den Haushalt fehlgeschlagen', beitritt.message);
+  }
+
+  return frisch.session;
+}
+
+/**
+ * Verbindung samt gueltiger Sitzung. Alles, was die Datenbank unter
+ * einer Kennung anspricht, geht hierueber - nicht ueber
+ * requireClient, das nur die Verbindung kennt.
+ */
+async function requireSession() {
+  const sb = await requireClient();
+  if (!sb) throw new Error(verbindungsGrund());
+  await ensureSession(sb);
+  return sb;
+}
+
 /** Warum es gerade nicht geht - in den Worten des letzten Versuchs. */
 function verbindungsGrund() {
   return statusValue.state === 'error' && statusValue.detail
@@ -338,8 +416,7 @@ function verbindungsGrund() {
 // ------------------------------------------------------------
 
 export async function createHousehold(name, memberName = null) {
-  const sb = await requireClient();
-  if (!sb) throw new Error(verbindungsGrund());
+  const sb = await requireSession();
   const { data, error } = await sb.rpc('create_household', { household_name: name || 'Haushalt', member_name: memberName });
   if (error) throw new Error(error.message);
   const row = Array.isArray(data) ? data[0] : data;
@@ -350,8 +427,7 @@ export async function createHousehold(name, memberName = null) {
 }
 
 export async function joinHousehold(code, memberName = null) {
-  const sb = await requireClient();
-  if (!sb) throw new Error(verbindungsGrund());
+  const sb = await requireSession();
   const { data, error } = await sb.rpc('join_household', { code, member_name: memberName });
   if (error) throw new Error(error.message);
   const row = Array.isArray(data) ? data[0] : data;
@@ -386,6 +462,13 @@ export async function pull() {
   const household = store.getState().household;
   if (!client || !household?.id) return 0;
 
+  try {
+    await ensureSession(client);
+  } catch (err) {
+    setStatus('error', err.message || 'Anmeldung abgelaufen');
+    return 0;
+  }
+
   let count = 0;
   for (const table of store.SYNCED_TABLES) {
     const { data, error } = await client.from(table).select('*').eq('household_id', household.id);
@@ -408,6 +491,13 @@ export async function push() {
   const household = store.getState().household;
   if (!client || !household?.id || pushing) return 0;
   if (!store.outboxSize()) return 0;
+
+  try {
+    await ensureSession(client);
+  } catch (err) {
+    setStatus('error', err.message || 'Anmeldung abgelaufen');
+    return 0;
+  }
 
   pushing = true;
   const batch = store.takeOutbox();
@@ -490,7 +580,9 @@ export function installListeners() {
     else {
       await push();
       await pull();
-      setStatus('online', statusValue.detail || 'Verbunden');
+      const wieder = store.getState().household;
+      setStatus(wieder?.id ? 'online' : 'ready',
+        wieder?.id ? `Verbunden · ${wieder.name}` : 'Verbunden – noch kein Haushalt');
     }
   });
 
