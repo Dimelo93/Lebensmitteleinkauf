@@ -10,7 +10,12 @@ import { getConfig } from '../config.js';
 import * as store from './state.js';
 import { nowIso } from './util.js';
 
-const CDN_URLS = [
+// Die mitgelieferte Fassung zuerst. Sie liegt im Projekt, ist also
+// auch im Funkloch da, und die Version steht fest - "@2" beim CDN
+// heisst dagegen "irgendein 2.x von heute". Der CDN bleibt als
+// Rueckfallebene, falls die Datei einmal fehlt.
+const LIBRARY_URLS = [
+  new URL('../vendor/supabase-js.mjs', import.meta.url).href,
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm',
   'https://esm.sh/@supabase/supabase-js@2',
   'https://unpkg.com/@supabase/supabase-js@2/dist/module/index.js',
@@ -160,9 +165,39 @@ function toLocal(table, row) {
 // Client aufbauen
 // ------------------------------------------------------------
 
+/**
+ * Den neuen Schluessel aus dem Authorization-Kopf halten.
+ *
+ * Supabase hat 2025 neue Schluessel eingefuehrt: sb_publishable_…
+ * statt des alten eyJ… Die sind keine JWT. supabase-js schreibt in
+ * den eigenen Quelltext, sie duerften "never be sent as a Bearer
+ * token" - schickt sie ueber den Anmeldedienst aber trotzdem so
+ * (geprueft in 2.112.3, der neuesten Fassung). Der Dienst versucht
+ * daraufhin, den Schluessel als JWT zu lesen, scheitert, und die
+ * anonyme Anmeldung kommt ohne Sitzung zurueck.
+ *
+ * Also hier entfernen. Nur genau diesen einen Wert: sobald eine
+ * echte Sitzung besteht, steht im selben Kopf das richtige Token,
+ * und das muss durch.
+ *
+ * Alte Schluessel (eyJ…) sind selbst JWT und bleiben unangetastet.
+ */
+function baueFetch(anonKey) {
+  if (!/^sb_(publishable|secret)_/.test(String(anonKey))) return undefined;
+
+  const verboten = `Bearer ${anonKey}`;
+  return async (input, init) => {
+    const anfrage = new Request(input, init);
+    if (anfrage.headers.get('Authorization') === verboten) {
+      anfrage.headers.delete('Authorization');
+    }
+    return fetch(anfrage);
+  };
+}
+
 async function loadLibrary() {
   let lastError = null;
-  for (const url of CDN_URLS) {
+  for (const url of LIBRARY_URLS) {
     try {
       const mod = await import(/* @vite-ignore */ url);
       if (mod?.createClient) return mod;
@@ -201,6 +236,7 @@ export async function connect() {
     const sb = createClient(config.url, config.anonKey, {
       auth: { persistSession: true, autoRefreshToken: true, storageKey: 'lebensmittel.auth' },
       realtime: { params: { eventsPerSecond: 5 } },
+      global: { fetch: baueFetch(config.anonKey) },
     });
 
     let { data: sessionData } = await sb.auth.getSession();
