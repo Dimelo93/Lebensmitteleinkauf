@@ -4,7 +4,10 @@
 // sein. Deshalb liegen alle eigenen Dateien im Cache und werden im
 // Hintergrund aufgefrischt.
 
-const VERSION = 'einkauf-v1';
+// Hochzaehlen, sobald sich eine der Dateien unten aendert. Sonst
+// liefert der Cache beim naechsten Start noch die alte Fassung -
+// bei config.js hiesse das: Zugangsdaten da, App trotzdem offline.
+const VERSION = 'einkauf-v2';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 

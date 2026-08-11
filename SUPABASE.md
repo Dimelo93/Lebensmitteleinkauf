@@ -46,10 +46,10 @@ Ohne diesen Schritt scheitert das Verbinden mit „Anonyme Anmeldung fehlgeschla
 
 ### A4. Zugangsdaten in die App
 
-1. **Project Settings** → **API**
+1. **Project Settings** → **API Keys** (Project URL steht unter **Data API**)
 2. Zwei Werte kopieren:
-   - **Project URL** — `https://xxxxxxxx.supabase.co`
-   - **anon public** — langer Text, beginnt mit `eyJ…`
+   - **Project URL** — `https://xxxxxxxx.supabase.co`, ohne `/rest/v1/` am Ende
+   - den **öffentlichen Schlüssel** — heisst je nach Alter des Projekts **Publishable key** (`sb_publishable_…`) oder **anon public** (`eyJ…`). Beide funktionieren.
 
 Dann eines von beidem:
 
@@ -61,12 +61,12 @@ In [`config.js`](config.js) eintragen und pushen:
 
 ```js
 export const SUPABASE_URL = 'https://xxxxxxxx.supabase.co';
-export const SUPABASE_ANON_KEY = 'eyJhbGciOi...';
+export const SUPABASE_ANON_KEY = 'sb_publishable_...';
 ```
 
 Dann ist jedes Gerät automatisch verbunden und braucht nur noch den Haushalts-Code.
 
-> Der **anon key** ist dafür gemacht, im Browser zu stehen. Ohne Mitgliedschaft im Haushalt gibt die Datenbank nichts heraus (Row Level Security). Der **service_role key** dagegen umgeht alle Regeln — der gehört weder in `config.js` noch sonst irgendwohin ins Frontend.
+> Der **öffentliche Schlüssel** ist dafür gemacht, im Browser zu stehen. Ohne Mitgliedschaft im Haushalt gibt die Datenbank nichts heraus (Row Level Security). Der **geheime Schlüssel** daneben — **Secret key** bzw. **service_role** — umgeht dagegen alle Regeln; der gehört weder in `config.js` noch sonst irgendwohin ins Frontend.
 
 ### A5. Haushalt anlegen und teilen
 

@@ -15,8 +15,8 @@
 // supabase/schema.sql). Der service_role key gehoert NIEMALS
 // hierher.
 
-export const SUPABASE_URL = '';
-export const SUPABASE_ANON_KEY = '';
+export const SUPABASE_URL = 'https://gcccvgocheecypimwfcw.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_InFapB_LjSPkHOtTnTqRoQ_1z4AWMGc';
 
 // Adresse der Edge Function fuer die Quittungs-Analyse. Leer
 // lassen: dann wird automatisch <SUPABASE_URL>/functions/v1/analyse-quittung

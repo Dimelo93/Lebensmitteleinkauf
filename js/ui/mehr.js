@@ -298,14 +298,14 @@ function connectionSheet() {
 
   sheet('Supabase-Verbindung', (body, close) => {
     const url = el('input', { type: 'url', placeholder: 'https://xxxx.supabase.co', value: config.url });
-    const key = el('input', { type: 'text', placeholder: 'eyJhbGciOi…', value: config.anonKey });
+    const key = el('input', { type: 'text', placeholder: 'sb_publishable_… oder eyJhbGciOi…', value: config.anonKey });
     const status = el('div.small.muted');
 
     add(body, 
       el('p.small.muted', { style: { marginTop: 0 } },
-        'Beide Werte stehen im Supabase-Dashboard unter Project Settings → API. Der anon key ist für den Browser gedacht und darf hier stehen; den service_role key niemals eintragen.'),
+        'Beide Werte stehen im Supabase-Dashboard unter Project Settings → API Keys. Der öffentliche Schlüssel (Publishable bzw. anon) ist für den Browser gedacht und darf hier stehen; den geheimen Schlüssel (Secret bzw. service_role) niemals eintragen.'),
       field('Projekt-URL', url),
-      field('anon key', key),
+      field('Öffentlicher Schlüssel', key),
       status,
       el('div.btn-row',
         el('button.btn.danger', {
