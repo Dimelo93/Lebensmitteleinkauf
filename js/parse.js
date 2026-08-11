@@ -1,0 +1,120 @@
+// Schnelleingabe: "2kg Rüebli", "3x Milch", "Hackfleisch 500g @12.90"
+// werden in Menge, Einheit, Name und Preis zerlegt. Alles optional -
+// wer nur "Brot" tippt, kriegt genau "Brot".
+
+const UNIT_ALIASES = {
+  stk: 'Stk', stck: 'Stk', stueck: 'Stk', stuck: 'Stk', st: 'Stk', x: 'x', mal: 'x',
+  g: 'g', gr: 'g', gramm: 'g',
+  kg: 'kg', kilo: 'kg', kilogramm: 'kg',
+  ml: 'ml', milliliter: 'ml',
+  dl: 'dl', deziliter: 'dl',
+  l: 'l', lt: 'l', liter: 'l',
+  pack: 'Pack', packung: 'Pack', packungen: 'Pack', pkg: 'Pack', päckli: 'Pack', paeckli: 'Pack',
+  bund: 'Bund',
+  dose: 'Dose', dosen: 'Dose', buechse: 'Dose', büchse: 'Dose',
+  flasche: 'Flasche', flaschen: 'Flasche', fl: 'Flasche',
+  glas: 'Glas', glaeser: 'Glas', gläser: 'Glas',
+  becher: 'Becher', sack: 'Sack', beutel: 'Beutel', schale: 'Schale',
+};
+
+const UNIT_PATTERN = Object.keys(UNIT_ALIASES).sort((a, b) => b.length - a.length).join('|');
+
+/** "4,50" und "4.50" sind dasselbe. */
+function toNumber(raw) {
+  if (raw == null) return null;
+  const n = Number(String(raw).replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeUnit(raw) {
+  if (!raw) return null;
+  return UNIT_ALIASES[String(raw).toLowerCase().replace('.', '')] ?? null;
+}
+
+function cleanName(raw) {
+  const name = String(raw ?? '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,;.-]+|[\s,;.-]+$/g, '')
+    .trim();
+  if (!name) return '';
+  // Erster Buchstabe gross, aber nur wenn der Nutzer alles klein
+  // getippt hat - "iPhone-Kabel" soll so bleiben, wie es kam.
+  return name === name.toLowerCase() ? name.charAt(0).toUpperCase() + name.slice(1) : name;
+}
+
+/**
+ * Zerlegt eine einzelne Zeile.
+ * @returns {{name: string, qty: number|null, unit: string|null, price: number|null}}
+ */
+export function parseLine(input) {
+  let rest = String(input ?? '').trim();
+  let qty = null;
+  let unit = null;
+  let price = null;
+
+  // Preis nur, wenn eindeutig markiert: "@4.50", "CHF 4.50", "Fr. 4.50",
+  // "4.50 CHF". Sonst wuerde "2 50" zur Preisfalle.
+  const priceMarked = rest.match(/(?:^|\s)(?:@|chf|fr\.?|sfr\.?)\s*(\d+(?:[.,]\d{1,2})?)(?=\s|$)/i);
+  const priceTrailing = rest.match(/(?:^|\s)(\d+(?:[.,]\d{1,2})?)\s*(?:chf|fr\.?|franken)(?=\s|$)/i);
+  const priceMatch = priceMarked ?? priceTrailing;
+  if (priceMatch) {
+    price = toNumber(priceMatch[1]);
+    rest = (rest.slice(0, priceMatch.index) + ' ' + rest.slice(priceMatch.index + priceMatch[0].length)).trim();
+  }
+
+  // Menge vorne: "2kg Rüebli", "1.5 l Milch", "3x Milch", "2 Milch"
+  const leading = rest.match(new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(${UNIT_PATTERN})?\\.?\\s+?(.*)$`, 'i'))
+    ?? rest.match(new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(${UNIT_PATTERN})\\.?\\s*(.*)$`, 'i'));
+  if (leading && leading[3] !== undefined && leading[3].trim()) {
+    qty = toNumber(leading[1]);
+    unit = normalizeUnit(leading[2]);
+    rest = leading[3];
+  }
+
+  // Menge hinten: "Rüebli 2kg", "Milch 1.5 l", "Joghurt 4x"
+  if (qty == null) {
+    const trailing = rest.match(new RegExp(`^(.*?)\\s+(\\d+(?:[.,]\\d+)?)\\s*(${UNIT_PATTERN})?\\.?$`, 'i'));
+    if (trailing && trailing[1].trim()) {
+      qty = toNumber(trailing[2]);
+      unit = normalizeUnit(trailing[3]);
+      rest = trailing[1];
+    }
+  }
+
+  // Einheit ohne Zahl mitten drin: "Milch Flasche"
+  if (unit == null) {
+    const bare = rest.match(new RegExp(`^(.*?)\\s+(${UNIT_PATTERN})\\.?$`, 'i'));
+    if (bare && bare[1].trim() && bare[2].length > 2) {
+      unit = normalizeUnit(bare[2]);
+      rest = bare[1];
+    }
+  }
+
+  return { name: cleanName(rest), qty, unit, price };
+}
+
+/**
+ * Zerlegt eine ganze Eingabe in mehrere Artikel. Trenner sind
+ * Komma, Semikolon, Zeilenumbruch und " + ". Dezimalkommas werden
+ * vorher geschuetzt, damit "4,50" nicht in zwei Artikel zerfaellt.
+ */
+const COMMA_GUARD = '\u0000';
+
+export function parseInput(input) {
+  return String(input ?? '')
+    .replace(/(\d),(\d)/g, `$1${COMMA_GUARD}$2`)
+    .split(/\n|;|,|\s\+\s/)
+    .map((part) => part.split(COMMA_GUARD).join(',').trim())
+    .filter(Boolean)
+    .map(parseLine)
+    .filter((parsed) => parsed.name);
+}
+
+/** Fuer die Vorschau unter dem Eingabefeld. */
+export function describeParsed({ qty, unit, price }) {
+  const bits = [];
+  if (qty != null) bits.push(unit ? `${qty} ${unit}` : String(qty));
+  else if (unit) bits.push(unit);
+  if (price != null) bits.push(`CHF ${price.toFixed(2)}`);
+  return bits.join(' · ');
+}
