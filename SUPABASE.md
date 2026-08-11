@@ -17,11 +17,23 @@ Teil A dauert etwa 10 Minuten und braucht nur einen Browser. Teil B braucht zus�
 
 ### A2. Tabellen anlegen
 
-1. Links im Menü **SQL Editor** → **New query**.
-2. Den kompletten Inhalt von [`supabase/schema.sql`](supabase/schema.sql) hineinkopieren.
-3. **Run**.
+Links im Menü **SQL Editor** → **New query**, dann das Skript einfügen und **Run** drücken. Nach jedem Durchlauf muss unten „Success. No rows returned" stehen.
 
-Am Ende sollte „Success. No rows returned" stehen. Das Skript legt Tabellen, Rechte und Realtime an und lässt sich gefahrlos mehrfach ausführen.
+**Am Rechner:** [`supabase/schema.sql`](supabase/schema.sql) am Stück einfügen, einmal Run, fertig.
+
+**Am Handy:** die vier Teildateien einzeln, in dieser Reihenfolge. Ein 400-Zeilen-Block wird beim Einfügen auf dem Telefon gern abgeschnitten, und Postgres meldet dann „syntax error at end of input".
+
+| Reihenfolge | Datei | Was passiert |
+|---|---|---|
+| 1 | [`teil1-tabellen.sql`](supabase/teil1-tabellen.sql) | Tabellen und Indizes |
+| 2 | [`teil2-funktionen.sql`](supabase/teil2-funktionen.sql) | Funktionen und Trigger |
+| 3 | [`teil3-rechte.sql`](supabase/teil3-rechte.sql) | Zugriffsschutz und Rechte |
+| 4 | [`teil4-realtime.sql`](supabase/teil4-realtime.sql) | Sofortige Aktualisierung |
+
+Zum Kopieren am Handy eignet sich die Rohfassung besser als die GitHub-Ansicht:
+`raw.githubusercontent.com/<benutzer>/<repo>/main/supabase/teil1-tabellen.sql`
+
+Alle Skripte sind wiederholbar — mehrfaches Ausführen schadet nicht. Teil 4 ist der einzige, der scheitern darf: ohne ihn gleicht die App alle 60 Sekunden ab statt sofort.
 
 ### A3. Anonyme Anmeldung einschalten
 
