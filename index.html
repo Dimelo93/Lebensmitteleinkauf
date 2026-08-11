@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="de-CH">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <title>Einkauf</title>
+  <meta name="description" content="Einkaufsliste nach Läden getrennt, mit Preisen und Quittungs-Analyse.">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="css/app.css">
+
+  <!-- iOS: als App auf dem Homescreen, eigene Statusleiste, eigenes Icon -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Einkauf">
+  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/icon-192.png" sizes="192x192">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <h1 id="title">Einkauf<span class="sub" id="subtitle">wird geladen …</span></h1>
+      <span class="status" id="status" hidden><span class="led"></span><span id="status-text"></span></span>
+    </header>
+
+    <main id="view"></main>
+
+    <div id="addbar-slot"></div>
+
+    <nav class="tabbar" id="tabbar"></nav>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="sheet-slot"></div>
+
+  <noscript>
+    <p style="padding:24px">Diese App braucht JavaScript. Bitte im Browser aktivieren.</p>
+  </noscript>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

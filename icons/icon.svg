@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Einkaufsliste">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#12a074"/>
+      <stop offset="1" stop-color="#065f42"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="114" fill="url(#bg)"/>
+
+  <!-- Zettel -->
+  <rect x="112" y="98" width="288" height="316" rx="30" fill="#ffffff"/>
+
+  <!-- Drei Läden, drei Farben -->
+  <g>
+    <circle cx="163" cy="172" r="17" fill="#e4572e"/>
+    <rect x="196" y="160" width="152" height="24" rx="12" fill="#0b1720" opacity=".82"/>
+
+    <circle cx="163" cy="256" r="17" fill="#2e86ab"/>
+    <rect x="196" y="244" width="120" height="24" rx="12" fill="#0b1720" opacity=".55"/>
+
+    <circle cx="163" cy="340" r="17" fill="#d99a00"/>
+    <rect x="196" y="328" width="140" height="24" rx="12" fill="#0b1720" opacity=".3"/>
+  </g>
+</svg>
