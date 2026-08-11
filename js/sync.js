@@ -133,16 +133,29 @@ export async function connect() {
   try {
     setStatus('connecting', 'Verbinde …');
     const { createClient } = await loadLibrary();
-    client = createClient(config.url, config.anonKey, {
+
+    // Bewusst erst in eine lokale Variable. Eine Verbindung ohne
+    // Anmeldung ist schlimmer als gar keine: sie sieht brauchbar
+    // aus, hat aber kein Token. Jeder spaetere Aufruf laeuft dann
+    // durch bis zur Datenbank, die mit "Nicht angemeldet" antwortet
+    // - und der echte Grund bleibt unsichtbar.
+    const sb = createClient(config.url, config.anonKey, {
       auth: { persistSession: true, autoRefreshToken: true, storageKey: 'lebensmittel.auth' },
       realtime: { params: { eventsPerSecond: 5 } },
     });
 
-    const { data: sessionData } = await client.auth.getSession();
+    let { data: sessionData } = await sb.auth.getSession();
     if (!sessionData?.session) {
-      const { error } = await client.auth.signInAnonymously();
-      if (error) throw new Error(`Anonyme Anmeldung fehlgeschlagen: ${error.message}`);
+      const { error } = await sb.auth.signInAnonymously();
+      if (error) throw new Error(erklaereAnmeldefehler(error));
+      ({ data: sessionData } = await sb.auth.getSession());
     }
+    if (!sessionData?.session) {
+      throw new Error('Die Anmeldung kam ohne Sitzung zurück. Steht in Supabase unter '
+        + 'Authentication → Sign In / Providers der Schalter "Anonymous sign-ins" auf an?');
+    }
+
+    client = sb;
 
     const household = store.getState().household;
     if (household?.id) {
@@ -161,10 +174,44 @@ export async function connect() {
     }
     return client;
   } catch (err) {
+    // Zuruecksetzen, damit der naechste Versuch wirklich neu
+    // aufbaut. Sonst bleibt eine kaputte Verbindung liegen und die
+    // App erholt sich auch dann nicht, wenn der Schalter in
+    // Supabase inzwischen umgelegt wurde.
+    client = null;
     console.warn('Verbindung fehlgeschlagen', err);
     setStatus('error', err.message || 'Verbindung fehlgeschlagen');
     return null;
   }
+}
+
+/**
+ * Aus der Meldung von Supabase eine machen, mit der man etwas
+ * anfangen kann. "Anonymous sign-ins are disabled" sagt einem
+ * niemandem, wo der Schalter sitzt.
+ */
+function erklaereAnmeldefehler(error) {
+  const text = String(error?.message ?? '');
+
+  if (/anonymous/i.test(text) && /disabled|not enabled|forbidden/i.test(text)) {
+    return 'Anonyme Anmeldung ist in Supabase noch ausgeschaltet. Dort unter '
+      + 'Authentication → Sign In / Providers den Schalter "Anonymous sign-ins" '
+      + 'einschalten und speichern, dann hier neu laden.';
+  }
+  if (/signups? not allowed|signup.*disabled/i.test(text)) {
+    return 'Supabase lässt gerade keine neuen Anmeldungen zu. Unter '
+      + 'Authentication → Sign In / Providers "Allow new users to sign up" '
+      + 'und "Anonymous sign-ins" einschalten.';
+  }
+  if (/invalid api key|no api key|apikey/i.test(text)) {
+    return 'Supabase weist den Schlüssel ab. Unter Project Settings → API Keys den '
+      + 'öffentlichen Schlüssel (Publishable bzw. anon) nochmals kopieren.';
+  }
+  if (/captcha/i.test(text)) {
+    return 'Supabase verlangt ein Captcha. Unter Authentication → Settings die '
+      + 'Captcha-Prüfung ausschalten.';
+  }
+  return `Anonyme Anmeldung fehlgeschlagen: ${text}`;
 }
 
 export function isConnected() {
@@ -184,13 +231,20 @@ export async function requireClient() {
   return connect();
 }
 
+/** Warum es gerade nicht geht - in den Worten des letzten Versuchs. */
+function verbindungsGrund() {
+  return statusValue.state === 'error' && statusValue.detail
+    ? statusValue.detail
+    : 'Keine Verbindung zu Supabase';
+}
+
 // ------------------------------------------------------------
 // Haushalt
 // ------------------------------------------------------------
 
 export async function createHousehold(name, memberName = null) {
   const sb = await requireClient();
-  if (!sb) throw new Error('Keine Verbindung zu Supabase');
+  if (!sb) throw new Error(verbindungsGrund());
   const { data, error } = await sb.rpc('create_household', { household_name: name || 'Haushalt', member_name: memberName });
   if (error) throw new Error(error.message);
   const row = Array.isArray(data) ? data[0] : data;
@@ -202,7 +256,7 @@ export async function createHousehold(name, memberName = null) {
 
 export async function joinHousehold(code, memberName = null) {
   const sb = await requireClient();
-  if (!sb) throw new Error('Keine Verbindung zu Supabase');
+  if (!sb) throw new Error(verbindungsGrund());
   const { data, error } = await sb.rpc('join_household', { code, member_name: memberName });
   if (error) throw new Error(error.message);
   const row = Array.isArray(data) ? data[0] : data;
