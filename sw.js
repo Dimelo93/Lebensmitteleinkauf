@@ -7,7 +7,7 @@
 // Hochzaehlen, sobald sich eine der Dateien unten aendert. Sonst
 // liefert der Cache beim naechsten Start noch die alte Fassung -
 // bei config.js hiesse das: Zugangsdaten da, App trotzdem offline.
-const VERSION = 'einkauf-v9';
+const VERSION = 'einkauf-v10';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
