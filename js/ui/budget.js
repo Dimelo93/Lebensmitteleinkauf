@@ -91,7 +91,7 @@ function captureCard() {
     el('button.btn.block', {
       style: { marginTop: '8px' },
       onclick: () => openFinishTrip(),
-    }, 'Einkauf von Hand erfassen'),
+    }, 'Einkauf erfassen'),
   );
 }
 

@@ -34,7 +34,7 @@ export function render() {
     add(wrap, 
       emptyState('🧺', 'Noch nichts auf der Liste', 'Tipp unten ein, was du brauchst. Die App merkt sich beim nächsten Mal, in welchen Laden es gehört.'),
       el('div.btn-row', { style: { marginBottom: '16px' } },
-        el('button.btn', { onclick: () => openFinishTrip() }, 'Einkauf ohne Liste erfassen'),
+        el('button.btn', { onclick: () => openFinishTrip() }, 'Einkauf erfassen'),
       ),
       suggestionChips(),
     );
@@ -51,6 +51,10 @@ export function render() {
     add(wrap, storeSection(group, settings));
   }
 
+  // Der Weg zum Erfassen muss in jedem Zustand offen sein. Vorher
+  // gab es ihn nur mit abgehakten Artikeln oder bei ganz leerer
+  // Liste - wer eine volle Liste vor sich hatte und noch nichts
+  // abgehakt, kam nirgendwo hin und konnte Gekauftes nicht eintragen.
   if (done > 0) {
     add(wrap, 
       el('div.btn-row', { style: { marginTop: '16px' } },
@@ -67,6 +71,12 @@ export function render() {
           }
         },
       }, 'Erledigte nur löschen'),
+    );
+  } else {
+    add(wrap,
+      el('div.btn-row', { style: { marginTop: '16px', marginBottom: '14px' } },
+        el('button.btn', { onclick: () => openFinishTrip() }, 'Einkauf erfassen'),
+      ),
     );
   }
 
