@@ -155,21 +155,35 @@ async function registerServiceWorker() {
   if (location.protocol === 'file:') return;
 
   try {
+    // Uebernimmt ein neuer Service Worker, ist der geladene Code von
+    // gestern. Einmal neu laden, dann passt beides zusammen.
+    //
+    // Frueher hing das an einem Hinweis, den man antippen musste.
+    // Wer ihn uebersah - acht Sekunden, auf einem Telefon -, blieb
+    // auf der alten Fassung sitzen, ohne es zu merken. Genau so
+    // gingen mehrere Korrekturen nacheinander ins Leere.
+    // Beim allerersten Besuch gibt es noch nichts zu ersetzen - dann
+    // waere ein Neuladen nur ein Flackern.
+    const hatteController = Boolean(navigator.serviceWorker.controller);
+    let laedtNeu = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (laedtNeu || !hatteController) return;
+      laedtNeu = true;
+      location.reload();
+    });
+
     const registration = await navigator.serviceWorker.register('sw.js');
+
+    // Bei jedem Start nachfragen, ob es etwas Neues gibt. Ohne das
+    // prueft der Browser unter Umstaenden erst nach einem Tag.
+    registration.update().catch(() => {});
 
     registration.addEventListener('updatefound', () => {
       const installing = registration.installing;
       if (!installing) return;
       installing.addEventListener('statechange', () => {
         if (installing.state === 'installed' && navigator.serviceWorker.controller) {
-          toast('Neue Version bereit', {
-            action: 'Neu laden',
-            onAction: () => {
-              installing.postMessage({ type: 'SKIP_WAITING' });
-              location.reload();
-            },
-            ms: 8000,
-          });
+          toast('Neue Version wird geladen …', { ms: 4000 });
         }
       });
     });
