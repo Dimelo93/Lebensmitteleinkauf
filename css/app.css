@@ -5,6 +5,11 @@
    ------------------------------------------------------------ */
 
 :root {
+  /* Sagt dem System, dass es beide Modi gibt. Ohne das malt iOS
+     Formularfelder, denen die Seite keinen Hintergrund gibt, immer
+     weiss - auch im dunklen Modus, wo die Schrift hell ist. */
+  color-scheme: light dark;
+
   --bg: #f2f2f7;
   --bg-elevated: #ffffff;
   --bg-sunken: #e6e6eb;
@@ -66,6 +71,20 @@ button, input, select, textarea {
   font: inherit;
   color: inherit;
 }
+
+/* Jedes Eingabefeld bekommt Farbe und Hintergrund ausdruecklich.
+   Verlaesst man sich auf die Vorgabe des Systems, malt iOS das Feld
+   weiss, waehrend die Schrift vom dunklen Modus hell bleibt - weiss
+   auf weiss, praktisch unlesbar. Regeln weiter unten (.addbar,
+   .field) duerfen das ueberschreiben, aber nie ins Leere laufen. */
+input, select, textarea {
+  background-color: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+input::placeholder, textarea::placeholder { color: var(--text-faint); }
 
 button { cursor: pointer; border: none; background: none; }
 

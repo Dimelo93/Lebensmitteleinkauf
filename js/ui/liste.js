@@ -379,58 +379,158 @@ export function editItem(id) {
 
 function finishTrip() {
   const settings = store.getState().settings;
-  const done = store.activeItems().filter((i) => i.done);
-  const withoutPrice = done.filter((i) => i.price == null);
+
+  // Im Laden landet regelmaessig etwas im Wagen, das nicht auf der
+  // Liste stand. Wer das erst zu Hause merkt, traegt es gar nicht
+  // mehr nach - und dann fehlt es im Verlauf und im Preisgedaechtnis.
+  // Also hier nachtragbar, direkt neben den Preisen.
+  const nachgetragen = [];
 
   sheet('Einkauf abschliessen', (body, close) => {
-    const sum = done.reduce((acc, i) => acc + (Number(i.price) || 0), 0);
+    // Wird nach jedem Nachtrag neu gezeichnet: Anzahl, Summe und die
+    // Liste der offenen Preise aendern sich dabei.
+    const zeichne = () => {
+      const done = store.activeItems().filter((i) => i.done);
+      const withoutPrice = done.filter((i) => i.price == null);
+      const sum = done.reduce((acc, i) => acc + (Number(i.price) || 0), 0);
 
-    add(body, 
-      el('p.muted', { style: { marginTop: 0 } },
-        `${done.length} Artikel wandern in den Verlauf. Erfasste Preise landen im Preisgedächtnis und machen den Ladenvergleich genauer.`),
-    );
+      body.replaceChildren();
 
-    if (settings.showPrices && withoutPrice.length) {
-      add(body, el('div.section-title', `Preis nachtragen (${withoutPrice.length} offen)`));
-      const card = el('div.card');
-      for (const item of withoutPrice) {
-        const input = el('input', {
-          type: 'number',
-          inputmode: 'decimal',
-          step: '0.05',
-          placeholder: settings.currency,
-          style: { width: '96px', minHeight: '38px', textAlign: 'right' },
-          onchange: () => {
-            store.updateItem(item.id, { price: input.value === '' ? null : Number(input.value) });
-          },
-        });
-        add(card, 
-          el('div.row',
-            el('div.grow',
-              el('div', item.name),
-              el('div.small.muted', store.storeById(item.storeId)?.name ?? 'Ohne Laden'),
-            ),
-            input,
-          ),
-        );
+      add(body,
+        el('p.muted', { style: { marginTop: 0 } },
+          `${done.length} Artikel wandern in den Verlauf. Erfasste Preise landen im Preisgedächtnis und machen den Ladenvergleich genauer.`),
+        nachtragFeld(settings, nachgetragen, zeichne),
+      );
+
+      if (nachgetragen.length) {
+        add(body, el('div.section-title', `Nachgetragen (${nachgetragen.length})`));
+        const card = el('div.card');
+        for (const id of nachgetragen) {
+          const item = store.activeItems().find((i) => i.id === id);
+          if (item) add(card, preisZeile(item, settings));
+        }
+        add(body, card);
       }
-      add(body, card);
+
+      const offen = withoutPrice.filter((i) => !nachgetragen.includes(i.id));
+      if (settings.showPrices && offen.length) {
+        add(body, el('div.section-title', `Preis nachtragen (${offen.length} offen)`));
+        const card = el('div.card');
+        for (const item of offen) add(card, preisZeile(item, settings));
+        add(body, card);
+      }
+
+      add(body,
+        el('div.totals', { style: { marginTop: '4px' } },
+          el('div.grow', el('div.small.muted', 'Bisher erfasst'), el('div.sum', formatMoney(sum, settings.currency))),
+        ),
+        el('div.btn-row',
+          el('button.btn', { onclick: close }, 'Abbrechen'),
+          el('button.btn.primary', {
+            onclick: () => {
+              const trip = store.finishTrip();
+              close();
+              if (trip) toast(`Einkauf gespeichert · ${formatMoney(trip.total, settings.currency)}`);
+            },
+          }, 'Abschliessen'),
+        ),
+      );
+    };
+
+    zeichne();
+  });
+}
+
+/** Eine Zeile mit Namen, Laden und Preisfeld. */
+function preisZeile(item, settings) {
+  const input = el('input', {
+    type: 'number',
+    inputmode: 'decimal',
+    step: '0.05',
+    placeholder: settings.currency,
+    value: item.price ?? '',
+    style: { width: '96px', minHeight: '38px', textAlign: 'right' },
+    onchange: () => {
+      store.updateItem(item.id, { price: input.value === '' ? null : Number(input.value) });
+    },
+  });
+
+  return el('div.row',
+    el('div.grow',
+      el('div', item.name),
+      el('div.small.muted', store.storeById(item.storeId)?.name ?? 'Ohne Laden'),
+    ),
+    input,
+  );
+}
+
+/**
+ * Eingabe fuer alles, was ungeplant im Wagen gelandet ist. Nimmt
+ * dieselbe Schreibweise wie die Leiste unten ("2 kg Rüebli"), damit
+ * man nicht zweierlei lernen muss.
+ */
+function nachtragFeld(settings, nachgetragen, zeichne) {
+  const name = el('input', {
+    type: 'text',
+    placeholder: 'z. B. Schoggi',
+    autocomplete: 'off',
+    enterkeyhint: 'done',
+    style: { minHeight: '38px' },
+  });
+
+  const preis = el('input', {
+    type: 'number',
+    inputmode: 'decimal',
+    step: '0.05',
+    placeholder: settings.currency,
+    style: { width: '96px', minHeight: '38px', textAlign: 'right' },
+  });
+
+  const uebernehmen = () => {
+    const parsed = parseInput(name.value);
+    if (!parsed.length) return;
+
+    // Der Laden, in dem gerade eingekauft wird, ist die beste
+    // Vermutung. Ist keiner gewaehlt, entscheidet das Gedaechtnis.
+    const aktiv = store.getState().settings.activeStoreId;
+    const eigenerPreis = preis.value === '' ? null : Number(preis.value);
+
+    for (const [index, entry] of parsed.entries()) {
+      const item = store.addItem({
+        name: entry.name,
+        qty: entry.qty,
+        unit: entry.unit,
+        // Der getippte Preis gilt dem ersten Artikel; bei "Milch,
+        // Brot" waere er sonst zweimal verbucht.
+        price: entry.price ?? (index === 0 ? eigenerPreis : null),
+        ...(aktiv ? { storeId: aktiv } : {}),
+      });
+      if (!item) continue;
+      store.toggleItem(item.id, true);
+      nachgetragen.push(item.id);
     }
 
-    add(body, 
-      el('div.totals', { style: { marginTop: '4px' } },
-        el('div.grow', el('div.small.muted', 'Bisher erfasst'), el('div.sum', formatMoney(sum, settings.currency))),
-      ),
-      el('div.btn-row',
-        el('button.btn', { onclick: close }, 'Abbrechen'),
-        el('button.btn.primary', {
-          onclick: () => {
-            const trip = store.finishTrip();
-            close();
-            if (trip) toast(`Einkauf gespeichert · ${formatMoney(trip.total, settings.currency)}`);
-          },
-        }, 'Abschliessen'),
-      ),
-    );
-  });
+    name.value = '';
+    preis.value = '';
+    haptic(12);
+    zeichne();
+  };
+
+  const form = el('form', {
+    onsubmit: (event) => {
+      event.preventDefault();
+      uebernehmen();
+    },
+    style: { display: 'flex', gap: '8px', alignItems: 'flex-end' },
+  },
+    el('div', { style: { flex: '1', minWidth: '0' } }, field('Auch gekauft', name)),
+    field('Preis', preis),
+    el('button.btn.primary', {
+      type: 'submit',
+      style: { minHeight: '38px', padding: '0 16px', marginBottom: '13px' },
+      'aria-label': 'Nachtragen',
+    }, '+'),
+  );
+
+  return el('div', { style: { marginBottom: '4px' } }, form);
 }
