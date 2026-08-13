@@ -33,6 +33,9 @@ export function render() {
   if (!open && !done) {
     add(wrap, 
       emptyState('🧺', 'Noch nichts auf der Liste', 'Tipp unten ein, was du brauchst. Die App merkt sich beim nächsten Mal, in welchen Laden es gehört.'),
+      el('div.btn-row', { style: { marginBottom: '16px' } },
+        el('button.btn', { onclick: () => openFinishTrip() }, 'Einkauf ohne Liste erfassen'),
+      ),
       suggestionChips(),
     );
     return wrap;
@@ -52,7 +55,7 @@ export function render() {
     add(wrap, 
       el('div.btn-row', { style: { marginTop: '16px' } },
         el('button.btn.primary', {
-          onclick: () => finishTrip(),
+          onclick: () => openFinishTrip(),
         }, `Einkauf abschliessen (${done})`),
       ),
       el('button.btn.block', {
@@ -377,7 +380,13 @@ export function editItem(id) {
 // Einkauf abschliessen
 // ------------------------------------------------------------
 
-function finishTrip() {
+/**
+ * Das Abschlussblatt. Auch von der Budget-Ansicht aus erreichbar:
+ * wer im Laden war, ohne vorher eine Liste zu tippen, muss den
+ * Einkauf trotzdem erfassen koennen - sonst fehlt er im Verlauf und
+ * im Preisgedaechtnis.
+ */
+export function openFinishTrip() {
   const settings = store.getState().settings;
 
   // Im Laden landet regelmaessig etwas im Wagen, das nicht auf der
@@ -398,7 +407,9 @@ function finishTrip() {
 
       add(body,
         el('p.muted', { style: { marginTop: 0 } },
-          `${done.length} Artikel wandern in den Verlauf. Erfasste Preise landen im Preisgedächtnis und machen den Ladenvergleich genauer.`),
+          done.length
+            ? `${done.length} Artikel wandern in den Verlauf. Erfasste Preise landen im Preisgedächtnis und machen den Ladenvergleich genauer.`
+            : 'Trag unten ein, was du gekauft hast. Erfasste Preise landen im Preisgedächtnis und machen den Ladenvergleich genauer.'),
         nachtragFeld(settings, nachgetragen, zeichne),
       );
 
@@ -427,6 +438,9 @@ function finishTrip() {
         el('div.btn-row',
           el('button.btn', { onclick: close }, 'Abbrechen'),
           el('button.btn.primary', {
+            // Ohne einen einzigen Artikel gibt es nichts zu speichern.
+            // Der Knopf sagt das, statt wirkungslos zu bleiben.
+            disabled: done.length === 0,
             onclick: () => {
               const trip = store.finishTrip();
               close();

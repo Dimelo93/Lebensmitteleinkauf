@@ -5,6 +5,7 @@ import { categoryIcon } from '../katalog.js';
 import * as store from '../state.js';
 import * as analyse from '../analyse.js';
 import { toast, sheet, confirmSheet, emptyState, field } from './shell.js';
+import { openFinishTrip } from './liste.js';
 
 // Zustand der laufenden Analyse (überlebt das Neuzeichnen).
 let pending = null;   // { images: [], previews: [], storeId, ziel }
@@ -85,6 +86,12 @@ function captureCard() {
       'Foto vom Kassenzettel machen. Die Analyse liest die Positionen, vergleicht sie mit deinen bisher bezahlten Preisen und rechnet einen Sparplan.'),
     input,
     el('button.btn.primary.block', { onclick: () => input.click() }, '📷 Quittung fotografieren'),
+    // Ohne Quittung, ohne Liste: von Hand erfassen. Sonst gaebe es
+    // fuer einen ungeplanten Einkauf gar keinen Weg in den Verlauf.
+    el('button.btn.block', {
+      style: { marginTop: '8px' },
+      onclick: () => openFinishTrip(),
+    }, 'Einkauf von Hand erfassen'),
   );
 }
 
