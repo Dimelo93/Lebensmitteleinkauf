@@ -7,7 +7,7 @@
 // Hochzaehlen, sobald sich eine der Dateien unten aendert. Sonst
 // liefert der Cache beim naechsten Start noch die alte Fassung -
 // bei config.js hiesse das: Zugangsdaten da, App trotzdem offline.
-const VERSION = 'einkauf-v8';
+const VERSION = 'einkauf-v9';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -76,6 +76,55 @@ self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
+// Wie lange auf das Netz gewartet wird, bevor der Cache einspringt.
+// Lang genug fuer ein traeges Mobilnetz, kurz genug, dass es an der
+// Kasse nicht stoert.
+const NETZ_FRIST_MS = 2500;
+
+function mitFrist(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const uhr = setTimeout(() => reject(new Error('Zeitüberschreitung')), ms);
+    promise.then(
+      (wert) => { clearTimeout(uhr); resolve(wert); },
+      (fehler) => { clearTimeout(uhr); reject(fehler); },
+    );
+  });
+}
+
+/**
+ * Eigene Dateien: erst das Netz, der Cache faengt auf.
+ *
+ * Vorher andersherum - Cache zuerst, Erneuerung im Hintergrund. Das
+ * las sich gut, hatte aber einen Haken: auf dem Telefon wird die App
+ * schnell schlafen gelegt, und die Erneuerung im Hintergrund kam nie
+ * bis zum Speichern. So blieb dieselbe alte Fassung ueber Tage
+ * haengen, und jede Korrektur lief ins Leere.
+ *
+ * Umgekehrt ist die App online immer aktuell und ohne Netz weiterhin
+ * sofort da - nur eben mit dem Stand von zuletzt.
+ */
+function eigeneDatei(request) {
+  const netz = fetch(request).then((response) => {
+    if (response && response.ok) {
+      const kopie = response.clone();
+      caches.open(SHELL).then((cache) => cache.put(request, kopie)).catch(() => {});
+    }
+    return response;
+  });
+  // Antworten wir aus dem Cache, darf die offene Anfrage nicht als
+  // unbehandelter Fehler enden.
+  netz.catch(() => {});
+
+  return caches.match(request).then(async (cached) => {
+    if (!cached) return netz;
+    try {
+      return await mitFrist(netz, NETZ_FRIST_MS);
+    } catch {
+      return cached;
+    }
+  });
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
@@ -100,21 +149,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Eigene Dateien: sofort aus dem Cache, im Hintergrund erneuern.
+  // Der Notausgang kommt immer frisch vom Server, nie aus dem Cache.
+  // Sonst waere ausgerechnet er veraltet, wenn man ihn braucht.
+  if (url.pathname.endsWith('/frisch.html')) return;
+
   if (url.origin === self.location.origin) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        const network = fetch(request)
-          .then((response) => {
-            if (response.ok) {
-              caches.open(SHELL).then((cache) => cache.put(request, response.clone()));
-            }
-            return response;
-          })
-          .catch(() => cached);
-        return cached ?? network;
-      }),
-    );
+    event.respondWith(eigeneDatei(request));
     return;
   }
 
