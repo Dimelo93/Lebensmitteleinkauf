@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>App auffrischen</title>
+<!--
+  Notausgang aus einem festgefahrenen Zwischenspeicher.
+
+  Absichtlich eine eigene Seite ohne jeden Import: sie muss auch dann
+  laufen, wenn die App selbst in einer veralteten Fassung feststeckt.
+  Weil diese Datei neu ist, liegt sie in keinem alten Cache - der
+  Browser muss sie also vom Server holen, und der Notausgang ist
+  damit selbst nie veraltet.
+
+  Ruehrt localStorage nicht an. Dort liegt die Einkaufsliste.
+-->
+<style>
+  :root { color-scheme: light dark; --bg: #f2f2f7; --card: #fff; --text: #11111a; --dim: #6b6b76; --accent: #0a7d5a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #000; --card: #1c1c1e; --text: #f5f5f7; --dim: #98989f; --accent: #30d99a; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 24px; background: var(--bg); color: var(--text);
+    font: 17px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  .karte { background: var(--card); border-radius: 16px; padding: 24px; max-width: 420px; width: 100%; }
+  h1 { font-size: 22px; margin: 0 0 12px; }
+  p { margin: 0 0 14px; color: var(--dim); }
+  ol { margin: 0 0 14px; padding-left: 20px; color: var(--dim); }
+  li { margin-bottom: 6px; }
+  li.fertig { color: var(--accent); }
+  a.knopf {
+    display: block; text-align: center; text-decoration: none; font-weight: 600;
+    background: var(--accent); color: #fff; padding: 14px; border-radius: 12px; margin-top: 8px;
+  }
+  code { background: var(--bg); padding: 1px 5px; border-radius: 4px; font-size: 15px; }
+</style>
+</head>
+<body>
+  <div class="karte">
+    <h1>App auffrischen</h1>
+    <p>Der Zwischenspeicher wird geleert und die neueste Fassung geholt.
+       Deine Einkaufsliste, Läden und Vorlagen bleiben erhalten.</p>
+    <ol id="schritte">
+      <li id="s1">Alte Programmfassung abmelden …</li>
+      <li id="s2">Zwischenspeicher leeren …</li>
+      <li id="s3">Neu laden …</li>
+    </ol>
+    <p id="ergebnis"></p>
+    <a class="knopf" id="weiter" href="./">Zur App</a>
+  </div>
+
+<script>
+(async function () {
+  const setze = (id, text, fertig) => {
+    const n = document.getElementById(id);
+    if (!n) return;
+    n.textContent = text;
+    if (fertig) n.className = 'fertig';
+  };
+
+  let abgemeldet = 0;
+  let geleert = 0;
+
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) {
+        if (await reg.unregister()) abgemeldet += 1;
+      }
+    }
+    setze('s1', `Alte Programmfassung abgemeldet (${abgemeldet})`, true);
+  } catch (err) {
+    setze('s1', 'Abmelden nicht möglich: ' + err.message);
+  }
+
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      for (const key of keys) {
+        if (await caches.delete(key)) geleert += 1;
+      }
+    }
+    setze('s2', `Zwischenspeicher geleert (${geleert})`, true);
+  } catch (err) {
+    setze('s2', 'Leeren nicht möglich: ' + err.message);
+  }
+
+  // Anhaengsel, damit auch der Browser selbst neu holt statt aus
+  // seinem eigenen Cache zu bedienen.
+  const ziel = './?frisch=' + Date.now();
+  document.getElementById('weiter').href = ziel;
+  setze('s3', 'Neu laden …', true);
+  document.getElementById('ergebnis').textContent =
+    'Gleich geht es weiter. Passiert nichts, tipp unten auf „Zur App".';
+
+  setTimeout(function () { location.replace(ziel); }, 1200);
+})();
+</script>
+</body>
+</html>
