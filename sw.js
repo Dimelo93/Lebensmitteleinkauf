@@ -7,7 +7,7 @@
 // Hochzaehlen, sobald sich eine der Dateien unten aendert. Sonst
 // liefert der Cache beim naechsten Start noch die alte Fassung -
 // bei config.js hiesse das: Zugangsdaten da, App trotzdem offline.
-const VERSION = 'einkauf-v7';
+const VERSION = 'einkauf-v8';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -50,6 +50,12 @@ self.addEventListener('install', (event) => {
           }),
         ),
       );
+      // Nicht warten, bis alle Fenster zu sind. Auf dem iPhone wird
+      // eine Web-App vom Homescreen kaum je richtig beendet - sie
+      // wird aus dem Speicher wiederhergestellt. Eine neue Fassung
+      // blieb sonst wochenlang im Wartezimmer, und die Korrektur kam
+      // beim Nutzer nie an.
+      await self.skipWaiting();
     }),
   );
 });

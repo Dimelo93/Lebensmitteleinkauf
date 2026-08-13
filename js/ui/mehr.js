@@ -160,6 +160,13 @@ export function render() {
         el('div.grow', el('div', 'Sicherung einlesen'), el('div.small.muted', 'Ersetzt die Daten auf diesem Gerät')),
         el('span.faint', '›'),
       ),
+      el('div.row.tappable', { onclick: frischLaden },
+        el('div.grow',
+          el('div', 'App auffrischen'),
+          el('div.small.muted', 'Programmdateien neu laden, wenn eine Neuerung fehlt'),
+        ),
+        el('span.faint', '›'),
+      ),
       el('div.row.tappable', {
         onclick: async () => {
           const ok = await confirmSheet(
@@ -235,12 +242,6 @@ function diagnoseCard() {
         },
       }, 'Kopieren'),
     ),
-    el('div.btn-row', { style: { marginTop: '8px' } },
-      el('button.btn.danger', { onclick: frischLaden }, 'App-Speicher auffrischen'),
-    ),
-    el('div.tiny.faint', { style: { marginTop: '8px' } },
-      'Auffrischen leert nur den Zwischenspeicher der Programmdateien und lädt neu. '
-      + 'Deine Liste bleibt.'),
   );
 
   (async () => {
