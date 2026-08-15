@@ -1,13 +1,12 @@
-// Service Worker: macht die App offline benutzbar.
+// Service Worker: macht Faden offline benutzbar.
 //
-// Im Laden ist oft kein Empfang - die Liste muss trotzdem sofort da
-// sein. Deshalb liegen alle eigenen Dateien im Cache und werden im
-// Hintergrund aufgefrischt.
+// Gleiche Strategie wie die Einkaufsliste (../sw.js, dort steht das
+// Warum im Detail): eigene Dateien erst vom Netz mit kurzer Frist,
+// der Cache faengt auf. Eigener Geltungsbereich: dieser Worker
+// gehoert nur zu faden/, die Einkaufsliste behaelt ihren.
 
-// Hochzaehlen, sobald sich eine der Dateien unten aendert. Sonst
-// liefert der Cache beim naechsten Start noch die alte Fassung -
-// bei config.js hiesse das: Zugangsdaten da, App trotzdem offline.
-const VERSION = 'einkauf-v12';
+// Hochzaehlen, sobald sich eine der Dateien unten aendert.
+const VERSION = 'faden-v1';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -21,17 +20,20 @@ const PRECACHE = [
   './js/state.js',
   './js/sync.js',
   './js/util.js',
-  './js/katalog.js',
+  './js/md.js',
+  './js/chat.js',
   './js/version.js',
-  './vendor/supabase-js.mjs',
-  './js/parse.js',
-  './js/analyse.js',
   './js/ui/shell.js',
-  './js/ui/liste.js',
-  './js/ui/laeden.js',
-  './js/ui/vorlagen.js',
-  './js/ui/budget.js',
+  './js/ui/editor.js',
+  './js/ui/fokus.js',
+  './js/ui/erfassen.js',
+  './js/ui/aufraeumen.js',
+  './js/ui/heute.js',
+  './js/ui/notizen.js',
+  './js/ui/projekte.js',
+  './js/ui/fragen.js',
   './js/ui/mehr.js',
+  '../vendor/supabase-js.mjs',
   './icons/icon.svg',
   './icons/icon-180.png',
   './icons/icon-192.png',
@@ -50,11 +52,9 @@ self.addEventListener('install', (event) => {
           }),
         ),
       );
-      // Nicht warten, bis alle Fenster zu sind. Auf dem iPhone wird
-      // eine Web-App vom Homescreen kaum je richtig beendet - sie
-      // wird aus dem Speicher wiederhergestellt. Eine neue Fassung
-      // blieb sonst wochenlang im Wartezimmer, und die Korrektur kam
-      // beim Nutzer nie an.
+      // Nicht warten, bis alle Fenster zu sind - auf dem iPhone wird
+      // eine Homescreen-App kaum je richtig beendet, eine neue
+      // Fassung bliebe sonst wochenlang im Wartezimmer.
       await self.skipWaiting();
     }),
   );
@@ -64,14 +64,11 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      // Nur eigene alte Zwischenspeicher wegwerfen: unter faden/
-      // wohnt eine zweite App auf derselben Domain, und der Cache
-      // Storage ist pro Domain gemeinsam. Ohne den Praefix-Filter
-      // wuerde jedes Update der Einkaufsliste den Offline-Cache von
-      // Faden ausloeschen.
+      // Nur eigene alte Zwischenspeicher wegwerfen - auf derselben
+      // Domain liegen auch die der Einkaufsliste.
       await Promise.all(
         keys
-          .filter((key) => key.startsWith('einkauf-') && key !== SHELL && key !== RUNTIME)
+          .filter((key) => key.startsWith('faden-') && key !== SHELL && key !== RUNTIME)
           .map((key) => caches.delete(key)),
       );
       await self.clients.claim();
@@ -84,8 +81,6 @@ self.addEventListener('message', (event) => {
 });
 
 // Wie lange auf das Netz gewartet wird, bevor der Cache einspringt.
-// Lang genug fuer ein traeges Mobilnetz, kurz genug, dass es an der
-// Kasse nicht stoert.
 const NETZ_FRIST_MS = 2500;
 
 function mitFrist(promise, ms) {
@@ -98,18 +93,7 @@ function mitFrist(promise, ms) {
   });
 }
 
-/**
- * Eigene Dateien: erst das Netz, der Cache faengt auf.
- *
- * Vorher andersherum - Cache zuerst, Erneuerung im Hintergrund. Das
- * las sich gut, hatte aber einen Haken: auf dem Telefon wird die App
- * schnell schlafen gelegt, und die Erneuerung im Hintergrund kam nie
- * bis zum Speichern. So blieb dieselbe alte Fassung ueber Tage
- * haengen, und jede Korrektur lief ins Leere.
- *
- * Umgekehrt ist die App online immer aktuell und ohne Netz weiterhin
- * sofort da - nur eben mit dem Stand von zuletzt.
- */
+/** Eigene Dateien: erst das Netz, der Cache faengt auf. */
 function eigeneDatei(request) {
   const netz = fetch(request).then((response) => {
     if (response && response.ok) {
@@ -118,8 +102,6 @@ function eigeneDatei(request) {
     }
     return response;
   });
-  // Antworten wir aus dem Cache, darf die offene Anfrage nicht als
-  // unbehandelter Fehler enden.
   netz.catch(() => {});
 
   return caches.match(request).then(async (cached) => {
@@ -138,27 +120,23 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // Supabase-API und die Quittungs-Analyse nie aus dem Cache bedienen.
+  // Supabase-API und die Edge Function nie aus dem Cache bedienen.
   if (url.pathname.startsWith('/rest/') || url.pathname.startsWith('/auth/') || url.pathname.startsWith('/functions/')) {
     return;
   }
 
   // Der Notausgang kommt immer frisch vom Server, nie aus dem Cache.
-  // Sonst waere ausgerechnet er veraltet, wenn man ihn braucht.
   // Steht VOR dem Navigations-Zweig: auch der Aufruf von frisch.html
-  // ist eine Navigation, und seine Antwort darf nicht als App-Hülle
-  // im Cache landen.
+  // ist eine Navigation, und ihre Antwort darf auf keinen Fall als
+  // App-Hülle im Cache landen.
   if (url.pathname.endsWith('/frisch.html')) return;
 
   // Seitenaufrufe: erst Netz, sonst die gecachte App-Hülle.
   if (request.mode === 'navigate') {
     // Als Hülle gespeichert wird nur eine gesunde Antwort auf die
-    // eigene App-Adresse. Ohne diese Prüfung überschriebe eine 404-
-    // oder Fehlerseite - oder beim allerersten Besuch die Faden-App
-    // unter /faden/, die dieser Worker noch mitbedient - den
-    // Offline-Start der Einkaufsliste.
-    const istShell = !url.pathname.includes('/faden')
-      && (url.pathname.endsWith('/') || url.pathname.endsWith('/index.html'));
+    // App-Adresse selbst - sonst vergiftet eine 404- oder Fehlerseite
+    // den Offline-Start.
+    const istShell = url.pathname.endsWith('/faden/') || url.pathname.endsWith('/faden/index.html');
     event.respondWith(
       fetch(request)
         .then((response) => {

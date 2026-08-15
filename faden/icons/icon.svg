@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Faden: ein Faden verbindet zwei Gedanken-Knoten. -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6b70dd"/>
+      <stop offset="1" stop-color="#44489f"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#g)"/>
+  <path d="M148 372 C110 300 160 236 232 244 C304 252 322 330 258 338 C210 344 200 282 250 272 C300 262 330 220 368 148"
+        fill="none" stroke="#ffffff" stroke-width="30" stroke-linecap="round"/>
+  <circle cx="148" cy="372" r="26" fill="#ffffff"/>
+  <circle cx="368" cy="148" r="26" fill="#ffffff"/>
+</svg>
