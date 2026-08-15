@@ -1,5 +1,7 @@
 # Einkaufsliste nach Läden
 
+> In diesem Repo lebt ausserdem **[Faden](faden/README.md)** – ein zweites Hirn im Stil von Obsidian, gebaut für Köpfe, die springen: Erfassen ohne Entscheidung, `[[Verlinkungen]]`, Fokus-Modus, Chat über die eigenen Notizen. Gleiche Technik, eigenes Homescreen-Icon, erreichbar unter `…/faden/`.
+
 Eine Einkaufsliste, die nach Läden getrennt ist: Lidl, Migros, Coop, Halal Metzger, Asia Shop. Läuft als Web-App auf dem iPhone-Homescreen, funktioniert im Laden ohne Empfang, und lässt sich mit dem Partner teilen.
 
 Dazu eine Quittungs-Analyse: Foto vom Kassenzettel machen, die App liest die Positionen aus, vergleicht sie mit den Preisen, die dieser Haushalt bisher bezahlt hat, und rechnet einen Sparplan.
